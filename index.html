@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>MapCompare</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0a0c0e;
+  --surface: #111318;
+  --surface2: #191d24;
+  --border: #252b36;
+  --accent: #f0c040;
+  --accent2: #40f0a0;
+  --danger: #f05050;
+  --text: #e4e8ee;
+  --muted: #5a6478;
+  --radius: 5px;
+  --sidebar: 270px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+/* HEADER */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 1000;
+}
+
+.logo {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.date-badges {
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.date-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+}
+.date-badge.before { background: rgba(240,192,64,0.12); color: var(--accent); border: 1px solid rgba(240,192,64,0.25); }
+.date-badge.after  { background: rgba(64,240,160,0.12); color: var(--accent2); border: 1px solid rgba(64,240,160,0.25); }
+
+.hcontrols { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+.btn.success { border-color: var(--accent2); color: var(--accent2); }
+.btn.success:hover { background: var(--accent2); color: #000; }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+
+.mode-bar { display: flex; gap: 3px; }
+
+/* LAYOUT */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  transition: transform 0.25s;
+}
+
+.sidebar.collapsed { transform: translateX(calc(-1 * var(--sidebar))); position: absolute; z-index: 900; height: calc(100% - 41px); }
+
+.sec {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sec-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 8px;
+}
+
+/* LAYERS */
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 5px;
+  background: var(--surface2);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.layer-row:hover { border-color: var(--accent); }
+.layer-row.loaded { border-color: rgba(64,240,160,0.35); }
+.layer-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.layer-dot.before { background: var(--accent); }
+.layer-dot.after  { background: var(--accent2); }
+.layer-info { flex: 1; min-width: 0; }
+.layer-name { font-size: 11px; white-width: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.layer-sub  { font-size: 9px; color: var(--muted); margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
+
+input[type=file] { display: none; }
+input[type=text], input[type=number], textarea, select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  padding: 6px 9px;
+  margin-bottom: 5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input[type=text]:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--surface2); }
+
+.op-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.op-row label { font-size: 10px; color: var(--muted); white-space: nowrap; width: 40px; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+.op-val { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent); width: 30px; text-align: right; }
+
+/* STATS */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stat-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
+.stat-lbl { font-size: 9px; color: var(--muted); margin-bottom: 2px; font-family: 'JetBrains Mono', monospace; }
+.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--accent); }
+.stat-unit { font-size: 10px; color: var(--muted); }
+
+.poly-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: var(--radius);
+  background: var(--surface2); border: 1px solid var(--border);
+  margin-bottom: 3px; font-size: 11px;
+}
+.poly-col { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.poly-lbl { flex: 1; }
+.poly-area { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--accent2); }
+.poly-del { color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.poly-del:hover { color: var(--danger); }
+
+.tool-bar { display: flex; gap: 3px; margin-bottom: 8px; }
+.tool-btn {
+  flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 9px;
+  padding: 5px 3px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--muted); cursor: pointer; text-align: center;
+  text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.15s;
+}
+.tool-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.tool-btn:hover:not(.active) { color: var(--text); border-color: var(--muted); }
+
+/* MAP */
+.map-wrap { flex: 1; position: relative; overflow: hidden; }
+#map { width: 100%; height: 100%; }
+
+/* DATE LABELS ON MAP */
+.map-label {
+  position: absolute;
+  top: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  z-index: 400;
+  pointer-events: none;
+  font-weight: 500;
+}
+#label-before { left: 12px; background: rgba(240,192,64,0.15); color: var(--accent); border: 1px solid rgba(240,192,64,0.3); }
+#label-after  { right: 12px; background: rgba(64,240,160,0.15); color: var(--accent2); border: 1px solid rgba(64,240,160,0.3); }
+
+/* SWIPE */
+#swipe-div {
+  position: absolute; top: 0; bottom: 0; width: 3px;
+  background: #fff; left: 50%; transform: translateX(-50%);
+  z-index: 500; cursor: ew-resize; display: none;
+  box-shadow: 0 0 8px rgba(0,0,0,0.5);
+}
+#swipe-div::after {
+  content: '◀▶';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff; color: #000;
+  font-size: 9px; font-family: 'JetBrains Mono', monospace;
+  padding: 5px 7px; border-radius: 3px; white-space: nowrap;
+}
+
+/* COORD BAR */
+#coord-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(10,12,14,0.88);
+  border-top: 1px solid var(--border);
+  padding: 4px 12px;
+  font-family: 'JetBrains Mono', monospace; font-size: 9px;
+  color: var(--muted); z-index: 400;
+  display: flex; gap: 16px;
+}
+#coord-bar span { color: var(--text); }
+
+/* SIDEBAR TOGGLE */
+#sidebar-toggle {
+  position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  z-index: 950;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  padding: 8px 4px;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--muted);
+  transition: all 0.15s;
+  display: none;
+}
+
+/* EXPORT MODAL */
+#export-modal {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,12,14,0.88); z-index: 800;
+  align-items: center; justify-content: center;
+}
+#export-modal.show { display: flex; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 24px; width: 440px; max-width: 95vw;
+}
+.modal-box h2 {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--accent); margin-bottom: 16px;
+}
+.modal-field { margin-bottom: 10px; }
+.modal-field label { font-size: 10px; color: var(--muted); display: block; margin-bottom: 3px; font-family: 'JetBrains Mono', monospace; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
+/* TENEMENT UPLOAD */
+.upload-btn {
+  width: 100%; padding: 8px; border: 1px dashed var(--border);
+  border-radius: var(--radius); background: var(--surface2);
+  color: var(--muted); font-size: 11px; font-family: 'Syne', sans-serif;
+  cursor: pointer; text-align: center; transition: all 0.15s;
+  margin-bottom: 5px;
+}
+.upload-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* NOTIF */
+#notif {
+  position: fixed; bottom: 36px; right: 16px;
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 8px 14px;
+  font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  z-index: 9999; opacity: 0; transform: translateY(8px);
+  transition: all 0.2s; pointer-events: none; max-width: 280px;
+}
+#notif.show { opacity: 1; transform: translateY(0); }
+
+.help-text { font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; }
+
+/* MOBILE */
+@media (max-width: 600px) {
+  :root { --sidebar: 240px; }
+  .sidebar { position: absolute; z-index: 900; height: calc(100% - 41px); transform: translateX(calc(-1 * var(--sidebar))); }
+  .sidebar.open { transform: translateX(0); }
+  #sidebar-toggle { display: flex; }
+  .date-badges { display: none; }
+  .logo { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Map<span style="color:var(--muted)">Compare</span></div>
+  <div class="date-badges">
+    <span class="date-badge before" id="hdr-before">BEFORE</span>
+    <span class="date-badge after" id="hdr-after">AFTER</span>
+  </div>
+  <div class="hcontrols">
+    <div class="mode-bar">
+      <button class="btn active" id="mode-side"    onclick="setMode('side')">Side</button>
+      <button class="btn"        id="mode-swipe"   onclick="setMode('swipe')">Swipe</button>
+      <button class="btn"        id="mode-overlay" onclick="setMode('overlay')">Overlay</button>
+    </div>
+    <button class="btn success" onclick="showExport()">↓ Report</button>
+    <button class="btn" id="menu-btn" onclick="toggleSidebar()" style="display:none">☰</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+
+    <div class="sec">
+      <div class="sec-label">Layers</div>
+      <div class="layer-row" id="lr-before" onclick="document.getElementById('fi-before').click()">
+        <div class="layer-dot before"></div>
+        <div class="layer-info">
+          <div class="layer-name" id="ln-before">Before — tap to load</div>
+          <div class="layer-sub" id="ls-before">No layer</div>
+        </div>
+      </div>
+      <input type="file" id="fi-before" accept=".tif,.tiff,.png,.jpg,.jpeg">
+      <div class="layer-row" id="lr-after" onclick="document.getElementById('fi-after').click()">
+        <div class="layer-dot after"></div>
+        <div class="layer-info">
+          <div class="layer-name" id="ln-after">After — tap to load</div>
+          <div class="layer-sub" id="ls-after">No layer</div>
+        </div>
+      </div>
+      <input type="file" id="fi-after" accept=".tif,.tiff,.png,.jpg,.jpeg">
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Tile URLs</div>
+      <div class="help-text">Paste R2/CDN tile URLs</div>
+      <div style="display:flex;gap:5px;margin-bottom:5px;align-items:center;">
+        <span class="date-badge before" style="flex-shrink:0">B</span>
+        <input type="text" id="url-before" placeholder="{z}/{x}/{y}.png URL" style="margin:0;">
+        <button class="btn" style="padding:5px 8px;" onclick="loadTileURL('before')">Go</button>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <span class="date-badge after" style="flex-shrink:0">A</span>
+        <input type="text" id="url-after" placeholder="{z}/{x}/{y}.png URL" style="margin:0;">
+        <button class="btn" style="padding:5px 8px;" onclick="loadTileURL('after')">Go</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Date Labels</div>
+      <div style="display:flex;gap:5px;margin-bottom:5px;align-items:center;">
+        <span class="date-badge before" style="flex-shrink:0;">B</span>
+        <input type="text" id="date-before" placeholder="e.g. Jul 2025" style="margin:0;" oninput="updateDateLabels()">
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <span class="date-badge after" style="flex-shrink:0;">A</span>
+        <input type="text" id="date-after" placeholder="e.g. May 2026" style="margin:0;" oninput="updateDateLabels()">
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Tenement Boundary</div>
+      <div class="upload-btn" onclick="document.getElementById('fi-tenement').click()">
+        + Load KML / GeoJSON
+      </div>
+      <input type="file" id="fi-tenement" accept=".kml,.geojson,.json">
+      <div id="tenement-status" class="help-text"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Opacity</div>
+      <div class="op-row">
+        <label>Before</label>
+        <input type="range" id="op-before" min="0" max="100" value="100" oninput="setOpacity('before',this.value)">
+        <span class="op-val" id="opv-before">100%</span>
+      </div>
+      <div class="op-row">
+        <label>After</label>
+        <input type="range" id="op-after" min="0" max="100" value="100" oninput="setOpacity('after',this.value)">
+        <span class="op-val" id="opv-after">100%</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Drawing</div>
+      <div class="tool-bar">
+        <div class="tool-btn" id="tool-polygon" onclick="setTool('polygon')">▷ Poly</div>
+        <div class="tool-btn" id="tool-marker"  onclick="setTool('marker')">⊕ Mark</div>
+        <div class="tool-btn active" id="tool-none" onclick="setTool('none')">✕ Off</div>
+      </div>
+      <button class="btn danger" style="width:100%;font-size:10px;" onclick="clearAll()">Clear All Drawings</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Measurements</div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-lbl">Total Area</div>
+          <div><span class="stat-val" id="stat-ha">0.00</span> <span class="stat-unit">ha</span></div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-lbl">Polygons</div>
+          <div><span class="stat-val" id="stat-n">0</span></div>
+        </div>
+      </div>
+      <div id="poly-list" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="sec" style="flex:1;">
+      <div class="sec-label">Notes</div>
+      <textarea id="notes" rows="4" placeholder="Field observations for report..."></textarea>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div id="swipe-div"></div>
+    <div class="map-label" id="label-before">BEFORE</div>
+    <div class="map-label" id="label-after">AFTER</div>
+    <div id="coord-bar">
+      Lat: <span id="c-lat">—</span> &nbsp;
+      Lng: <span id="c-lng">—</span> &nbsp;
+      Zoom: <span id="c-zoom">—</span>
+    </div>
+    <div id="sidebar-toggle" onclick="toggleSidebar()">☰</div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div id="export-modal">
+  <div class="modal-box">
+    <h2>Export Report</h2>
+    <div class="modal-field"><label>Project / Site</label><input type="text" id="exp-site" placeholder="e.g. GMO Encroachment Monitor"></div>
+    <div class="modal-field"><label>Before Date</label><input type="text" id="exp-before" placeholder="e.g. July 2025"></div>
+    <div class="modal-field"><label>After Date</label><input type="text" id="exp-after" placeholder="e.g. May 2026"></div>
+    <div class="modal-field"><label>Prepared By</label><input type="text" id="exp-author" placeholder="Name / Title"></div>
+    <div class="modal-field"><label>Summary of Findings</label><textarea id="exp-notes" rows="3" placeholder="Key observations..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideExport()">Cancel</button>
+      <button class="btn success" onclick="genReport()">Generate Report</button>
+    </div>
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const R2_BASE = 'https://pub-5cce5aa724f84f8588ed51cb0cb543b4.r2.dev';
+const BEFORE_TILES = `${R2_BASE}/output_before/{z}/{x}/{y}.png`;
+const AFTER_TILES  = `${R2_BASE}/output_after/{z}/{x}/{y}.png`;
+const SITE_CENTER  = [18.924, 102.897];
+const SITE_ZOOM    = 17;
+const LICENCE_GJ   = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[102.87292029697467, 18.936941517030633], [102.93176601688663, 18.93760713786518], [102.93234362059451, 18.890641508599572], [102.92854810707519, 18.89059924074512], [102.92863698051774, 18.88337375411964], [102.92484163965233, 18.883331426259762], [102.92488614248231, 18.87971868938645], [102.92298851646595, 18.879697500798823], [102.92301078439799, 18.87789113397491], [102.92111318122093, 18.877869928229398], [102.92113546692947, 18.87606356320802], [102.91923788659143, 18.87604234030866], [102.91928249101773, 18.872429613499094], [102.91738495382029, 18.87240837563206], [102.91742958870563, 18.868795651683783], [102.91553209464138, 18.868774398856942], [102.91557675996806, 18.86516167777383], [102.90039722373264, 18.864990994597235], [102.90044220352026, 18.861378307096246], [102.89285265899761, 18.861292519487154], [102.89289779082297, 18.85767984811925], [102.8739245150988, 18.857464071465298], [102.87292029697467, 18.936941517030633]]]}, "properties": {"ID": "PKM", "AREA_km2": "48.52", "POINT": "1"}}, {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[102.67734398430419, 18.94001426957048], [102.68493597025845, 18.940109221878462], [102.68498577599637, 18.93649708994598], [102.68878170443385, 18.93654444005436], [102.68883141740884, 18.93293229689068], [102.69262727564846, 18.932979559765972], [102.69267689589748, 18.929367405388046], [102.69647268393703, 18.929414581061412], [102.69649744912128, 18.927608498464945], [102.70029320767472, 18.927655591793368], [102.70034264818997, 18.924043415802075], [102.70224049095943, 18.924066928579517], [102.70238862313455, 18.913230376977236], [102.69859318457353, 18.913183360976582], [102.6986426209142, 18.90957118369565], [102.69484727492704, 18.909524099904743], [102.69489678138329, 18.905911930753543], [102.6911015279678, 18.905864779204734], [102.69115110450271, 18.902252618198606], [102.68545836745967, 18.90218176026294], [102.68550805468385, 18.898569612267348], [102.68361052195452, 18.89854595911092], [102.68368509259349, 18.893127741532798], [102.68178762363975, 18.893104076317965], [102.68186222981272, 18.887685862587805], [102.67996482461525, 18.887662185326143], [102.68008921326735, 18.878631833622595], [102.67819191240257, 18.8786081491906], [102.67829145362742, 18.871383870682973], [102.67639423675362, 18.87136017666519], [102.67649381386819, 18.864135901785126], [102.67269955086255, 18.864088475301507], [102.67277432563296, 18.858670279754616], [102.62914251910999, 18.858119494620748], [102.62881224626281, 18.88159758104919], [102.6420931770452, 18.881766517538686], [102.64158695660558, 18.917886870996764], [102.67384813931034, 18.918294037681406], [102.67359805851176, 18.93635457433786], [102.67739395301686, 18.936402157086732], [102.67734398430419, 18.94001426957048]]]}, "properties": {"ID": "BHX", "AREA_km2": "38.2", "POINT": "1"}}]};
+const CONCESSION_GJ= {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.23256374395349, 19.746547869191264]}, "properties": {"POINT": "1", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.24973583909778, 19.746716552390918]}, "properties": {"POINT": "2", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.25097256004734, 19.63290369012088]}, "properties": {"POINT": "3", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.26622602013651, 19.633051324870692]}, "properties": {"POINT": "4", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.26674881570075, 19.584273524529873]}, "properties": {"POINT": "5", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.18288178191548, 19.58344777013353]}, "properties": {"POINT": "6", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.18269927781301, 19.599706327609734]}, "properties": {"POINT": "7", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.13504470126466, 19.599219354499912]}, "properties": {"POINT": "8", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.13368654402, 19.716638197767058]}, "properties": {"POINT": "9", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.21762054093209, 19.717492343581448]}, "properties": {"POINT": "10", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.21772065364708, 19.70845975970426]}, "properties": {"POINT": "11", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.23298099023452, 19.708610767134694]}, "properties": {"POINT": "12", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.23256374395349, 19.746547869191264]}, "properties": {"POINT": "1", "JOIN": "7", "ID": "Block R3", "Area_km2": "184.36", "ID2": "Northern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.18393268690761, 19.48950883340957]}, "properties": {"POINT": "13", "JOIN": "8", "ID": "Block R2", "Area_km2": "182.6", "ID2": "Central MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.34204849738708, 19.491026034751116]}, "properties": {"POINT": "14", "JOIN": "8", "ID": "Block R2", "Area_km2": "182.6", "ID2": "Central MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.34305734501301, 19.39165808734217]}, "properties": {"POINT": "15", "JOIN": "8", "ID": "Block R2", "Area_km2": "182.6", "ID2": "Central MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.18503762331457, 19.390149224316602]}, "properties": {"POINT": "16", "JOIN": "8", "ID": "Block R2", "Area_km2": "182.6", "ID2": "Central MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.18393268690761, 19.48950883340957]}, "properties": {"POINT": "13", "JOIN": "8", "ID": "Block R2", "Area_km2": "182.6", "ID2": "Central MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.63878215922199, 19.11654606527974]}, "properties": {"POINT": "17", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.86679559106854, 19.119331573973223]}, "properties": {"POINT": "18", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.86681877385384, 19.11752531931432]}, "properties": {"POINT": "19", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.10056900600162, 19.120087331999674]}, "properties": {"POINT": "20", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.10202896200161, 18.991823808132704]}, "properties": {"POINT": "21", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.06404745606169, 18.991430270463276]}, "properties": {"POINT": "22", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.06408923053192, 18.987817266572726]}, "properties": {"POINT": "23", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.03370536045739, 18.98749689583248]}, "properties": {"POINT": "24", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.03376898608867, 18.98207748543134]}, "properties": {"POINT": "25", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00718446257255, 18.981793161668286]}, "properties": {"POINT": "26", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.0072059525413, 18.97998671985504]}, "properties": {"POINT": "27", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00340824313864, 18.979945795114467]}, "properties": {"POINT": "28", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00345129753828, 18.976332918730726]}, "properties": {"POINT": "29", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00155248737269, 18.97631243137568]}, "properties": {"POINT": "30", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00157403135292, 18.97450599471574]}, "properties": {"POINT": "31", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.99777645921645, 18.974464965863888]}, "properties": {"POINT": "32", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.99781962159015, 18.970852099809996]}, "properties": {"POINT": "33", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.99402214096207, 18.970811001591027]}, "properties": {"POINT": "34", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9940653752722, 18.967198142443028]}, "properties": {"POINT": "35", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98647060684124, 18.967115729593516]}, "properties": {"POINT": "36", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98638380154439, 18.97434141265862]}, "properties": {"POINT": "37", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96739623565885, 18.974133935202772]}, "properties": {"POINT": "38", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96761521740521, 18.95606992844915]}, "properties": {"POINT": "39", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98470217759835, 18.95625655459999]}, "properties": {"POINT": "40", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98481065723912, 18.947224441610164]}, "properties": {"POINT": "41", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98101374175323, 18.947183126247268]}, "properties": {"POINT": "42", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.98107892240934, 18.941763866639835]}, "properties": {"POINT": "43", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9734853657644, 18.941681028413438]}, "properties": {"POINT": "44", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.97350716928825, 18.93987461627823]}, "properties": {"POINT": "45", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.97160880669247, 18.93985386033081]}, "properties": {"POINT": "46", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.97165244709882, 18.936241039185916]}, "properties": {"POINT": "47", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9659574964895, 18.93617866769703]}, "properties": {"POINT": "48", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96597937413235, 18.93437226295129]}, "properties": {"POINT": "49", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96218279356083, 18.934330589227024]}, "properties": {"POINT": "50", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9622047094848, 18.93252418837551]}, "properties": {"POINT": "51", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96030644330703, 18.932503324554123]}, "properties": {"POINT": "52", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9603283771241, 18.93069692546477]}, "properties": {"POINT": "53", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95843013381247, 18.930676044387255]}, "properties": {"POINT": "54", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95845208551802, 18.928869647061997]}, "properties": {"POINT": "55", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95655386507228, 18.9288487487324]}, "properties": {"POINT": "56", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95661976636474, 18.92342956092743]}, "properties": {"POINT": "57", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95472160952477, 18.923408649637167]}, "properties": {"POINT": "58", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95474359200523, 18.921602255094356]}, "properties": {"POINT": "59", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95284545802579, 18.92158132656397]}, "properties": {"POINT": "60", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.9528894562311, 18.91796854064235]}, "properties": {"POINT": "61", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95099136547368, 18.917947597023385]}, "properties": {"POINT": "62", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95101338119174, 18.91614120564648]}, "properties": {"POINT": "63", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94911531329193, 18.91612024479741]}, "properties": {"POINT": "64", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94913734686881, 18.914313855194205]}, "properties": {"POINT": "65", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94723930182634, 18.914292877119077]}, "properties": {"POINT": "66", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94726135325743, 18.912486489291496]}, "properties": {"POINT": "67", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94536333107207, 18.912465493994347]}, "properties": {"POINT": "68", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94538540035278, 18.910659107944323]}, "properties": {"POINT": "69", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94158940420282, 18.910617063542883]}, "properties": {"POINT": "70", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94161151167805, 18.90881068142956]}, "properties": {"POINT": "71", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.93971353771538, 18.908789632331416]}, "properties": {"POINT": "72", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.93984625192587, 18.89795134471498]}, "properties": {"POINT": "73", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.93225486939909, 18.897867006570195]}, "properties": {"POINT": "74", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.93234362059451, 18.890641508599572]}, "properties": {"POINT": "75", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92854810707519, 18.89059924074512]}, "properties": {"POINT": "76", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92863698051774, 18.88337375411964]}, "properties": {"POINT": "77", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92484163965233, 18.883331426259762]}, "properties": {"POINT": "78", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92488614248231, 18.87971868938645]}, "properties": {"POINT": "79", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92298851646595, 18.879697500798823]}, "properties": {"POINT": "80", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92301078439799, 18.87789113397491]}, "properties": {"POINT": "81", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92111318122093, 18.877869928229398]}, "properties": {"POINT": "82", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92113546692947, 18.87606356320802]}, "properties": {"POINT": "83", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91923788659143, 18.87604234030866]}, "properties": {"POINT": "84", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91928249101773, 18.872429613499094]}, "properties": {"POINT": "85", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91738495382029, 18.87240837563206]}, "properties": {"POINT": "86", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91742958870563, 18.868795651683783]}, "properties": {"POINT": "87", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91553209464138, 18.868774398856942]}, "properties": {"POINT": "88", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.91557675996806, 18.86516167777383]}, "properties": {"POINT": "89", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.90039722373264, 18.864990994597235]}, "properties": {"POINT": "90", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.90044220352026, 18.861378307096246]}, "properties": {"POINT": "91", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.89285265899761, 18.861292519487154]}, "properties": {"POINT": "92", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.89289779082297, 18.85767984811925]}, "properties": {"POINT": "93", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.8739245150988, 18.857464071465298]}, "properties": {"POINT": "94", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.87349149091655, 18.891783967093783]}, "properties": {"POINT": "95", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.85071927347654, 18.89152197538539]}, "properties": {"POINT": "96", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.85060394462688, 18.900553369768424]}, "properties": {"POINT": "97", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.83352411410817, 18.90035494600446]}, "properties": {"POINT": "98", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.83343107174336, 18.907579973264653]}, "properties": {"POINT": "99", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.81635072299262, 18.907379899685537]}, "properties": {"POINT": "100", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.81623344503491, 18.916411072626467]}, "properties": {"POINT": "101", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.8010502799377, 18.91623182096466]}, "properties": {"POINT": "102", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.80095575827468, 18.923456678974638]}, "properties": {"POINT": "103", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.74971165144267, 18.922842300509433]}, "properties": {"POINT": "104", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.74992920930389, 18.906586928164735]}, "properties": {"POINT": "105", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.70438496404229, 18.906029470931283]}, "properties": {"POINT": "106", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.70470516158014, 18.882550177503195]}, "properties": {"POINT": "107", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.68383415768011, 18.882291296062427]}, "properties": {"POINT": "108", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.68415678365551, 18.858812283728366]}, "properties": {"POINT": "109", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.62914251910999, 18.858119494620748]}, "properties": {"POINT": "110", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.62881224626281, 18.88159758104919]}, "properties": {"POINT": "111", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.6420931770452, 18.881766517538686]}, "properties": {"POINT": "112", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.64034185445641, 19.00638108795286]}, "properties": {"POINT": "113", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.68781004668281, 19.006980925490534]}, "properties": {"POINT": "114", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.68788494197233, 19.001562755010376]}, "properties": {"POINT": "115", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.72206203058704, 19.00198697534433]}, "properties": {"POINT": "116", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.72198824002857, 19.00740527580842]}, "properties": {"POINT": "117", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.75236961353697, 19.007777181119568]}, "properties": {"POINT": "118", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.7524424219996, 19.002358766735604]}, "properties": {"POINT": "119", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.75434121989257, 19.00238183826821]}, "properties": {"POINT": "120", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.75443817760161, 18.995157270981526]}, "properties": {"POINT": "121", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.77152674542906, 18.995363954457275]}, "properties": {"POINT": "122", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.77007884853143, 19.103733088691957]}, "properties": {"POINT": "123", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.63898732149671, 19.102098281322764]}, "properties": {"POINT": "124", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.63878215922199, 19.11654606527974]}, "properties": {"POINT": "17", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.90808497878487, 19.009604959479685]}, "properties": {"POINT": "", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.94986524838441, 19.010073058324267]}, "properties": {"POINT": "126", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.95052845809879, 18.955881729094884]}, "properties": {"POINT": "127", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92964491643595, 18.955649571329797]}, "properties": {"POINT": "128", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.92919853199561, 18.991776686467023]}, "properties": {"POINT": "129", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.90831080139374, 18.991541698690693]}, "properties": {"POINT": "130", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.90808497878487, 19.009604959479685]}, "properties": {"POINT": "125", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96695752764946, 19.010261835785546]}, "properties": {"POINT": "", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00684029207284, 19.01069617958929]}, "properties": {"POINT": "132", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [103.00707697622818, 18.990825365101234]}, "properties": {"POINT": "133", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96719893993843, 18.99039150910739]}, "properties": {"POINT": "134", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [102.96695752764946, 19.010261835785546]}, "properties": {"POINT": "131", "JOIN": "13", "ID": "Block R1", "Area_km2": "893.6", "ID2": "Southern MEPA"}}]};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const S = {
+  beforeLayer: null, afterLayer: null,
+  beforeName: 'Before', afterName: 'After',
+  mode: 'side', tool: 'none',
+  polygons: [], markers: [],
+  curPolyPts: [], previewLine: null,
+  swipePos: 0.5, swiping: false,
+  colors: ['#f05050','#40f0a0','#f0c040','#50a0f0','#f050f0','#50f0f0'],
+  colorIdx: 0,
+  tenementLayer: null,
+  sidebarOpen: true,
+};
+
+// ── MAP ───────────────────────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: SITE_CENTER, zoom: SITE_ZOOM,
+  zoomControl: true, attributionControl: false,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 22, opacity: 0.35,
+}).addTo(map);
+
+const drawLayer = L.featureGroup().addTo(map);
+
+map.on('mousemove', e => {
+  document.getElementById('c-lat').textContent = e.latlng.lat.toFixed(6);
+  document.getElementById('c-lng').textContent = e.latlng.lng.toFixed(6);
+  document.getElementById('c-zoom').textContent = map.getZoom();
+});
+
+map.on('click', e => {
+  if (S.tool === 'polygon') handlePolyClick(e);
+  else if (S.tool === 'marker') addMarker(e.latlng);
+});
+
+map.on('dblclick', e => {
+  if (S.tool === 'polygon') finishPoly();
+});
+
+// ── AUTO-LOAD R2 TILES ────────────────────────────────────────────────────────
+function loadR2Tiles() {
+  addTileLayer('before', BEFORE_TILES, 'Before (R2)');
+  addTileLayer('after', AFTER_TILES, 'After (R2)');
+  document.getElementById('url-before').value = BEFORE_TILES;
+  document.getElementById('url-after').value = AFTER_TILES;
+  loadBoundaries();
+}
+
+function loadBoundaries() {
+  // Mining Licence — magenta solid
+  L.geoJSON(LICENCE_GJ, {
+    style: f => ({
+      color: '#e040e0', weight: 2.5, fillOpacity: 0.06,
+      dashArray: null
+    }),
+    onEachFeature: (f, layer) => {
+      layer.bindTooltip(`<b>Mining Licence</b><br>ID: ${f.properties.ID}<br>Area: ${f.properties.AREA_km2} km²`, {sticky: true});
+    }
+  }).addTo(map);
+
+  // Concession points — green dots
+  L.geoJSON(CONCESSION_GJ, {
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+      radius: 3, color: '#40c040', fillColor: '#40c040', fillOpacity: 0.7, weight: 1
+    }),
+    onEachFeature: (f, layer) => {
+      layer.bindTooltip(f.properties.ID, {sticky: true});
+    }
+  }).addTo(map);
+}
+
+// ── LAYER LOADING ─────────────────────────────────────────────────────────────
+function addTileLayer(which, url, name) {
+  if (S[which+'Layer']) map.removeLayer(S[which+'Layer']);
+  const layer = L.tileLayer(url, { maxZoom: 22, opacity: 1, tms: false,
+    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  });
+  S[which+'Layer'] = layer;
+  S[which+'Name'] = name;
+  updateLayers();
+  document.getElementById('ln-'+which).textContent = name;
+  document.getElementById('ls-'+which).textContent = 'Tile layer';
+  document.getElementById('lr-'+which).classList.add('loaded');
+  notify('Loaded: ' + name);
+}
+
+function loadImageFile(which, file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const bounds = [[-85,-180],[85,180]];
+    if (S[which+'Layer']) map.removeLayer(S[which+'Layer']);
+    const layer = L.imageOverlay(url, bounds, { opacity: 1 });
+    S[which+'Layer'] = layer;
+    S[which+'Name'] = file.name;
+    updateLayers();
+    document.getElementById('ln-'+which).textContent = file.name;
+    document.getElementById('ls-'+which).textContent = 'Image layer';
+    document.getElementById('lr-'+which).classList.add('loaded');
+    notify('Loaded: ' + file.name);
+  };
+  img.src = url;
+}
+
+function loadTileURL(which) {
+  const url = document.getElementById('url-'+which).value.trim();
+  if (url) addTileLayer(which, url, url.length > 30 ? url.slice(0,30)+'…' : url);
+}
+
+document.getElementById('fi-before').addEventListener('change', e => { if (e.target.files[0]) loadImageFile('before', e.target.files[0]); });
+document.getElementById('fi-after').addEventListener('change',  e => { if (e.target.files[0]) loadImageFile('after',  e.target.files[0]); });
+
+// ── TENEMENT BOUNDARY ─────────────────────────────────────────────────────────
+document.getElementById('fi-tenement').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      let geo;
+      if (file.name.endsWith('.kml')) {
+        const parser = new DOMParser();
+        const kml = parser.parseFromString(ev.target.result, 'text/xml');
+        geo = toGeoJSON(kml);
+      } else {
+        geo = JSON.parse(ev.target.result);
+      }
+      if (S.tenementLayer) map.removeLayer(S.tenementLayer);
+      S.tenementLayer = L.geoJSON(geo, {
+        style: { color: '#f0c040', weight: 2.5, fillOpacity: 0.08, dashArray: '6 4' }
+      }).addTo(map);
+      document.getElementById('tenement-status').textContent = '✓ ' + file.name + ' loaded';
+      notify('Tenement boundary loaded');
+    } catch(err) {
+      notify('Error loading boundary: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+// Simple KML to GeoJSON (polygons only)
+function toGeoJSON(kml) {
+  const coords = [];
+  kml.querySelectorAll('coordinates').forEach(c => {
+    const pts = c.textContent.trim().split(/\s+/).map(p => {
+      const [lng, lat] = p.split(',').map(Number);
+      return [lng, lat];
+    });
+    coords.push(pts);
+  });
+  return { type:'FeatureCollection', features: coords.map(c => ({
+    type:'Feature', geometry:{ type:'Polygon', coordinates:[c] }, properties:{}
+  }))};
+}
+
+// ── VIEW MODES ────────────────────────────────────────────────────────────────
+function setMode(mode) {
+  S.mode = mode;
+  ['side','swipe','overlay'].forEach(m => {
+    document.getElementById('mode-'+m).classList.toggle('active', m === mode);
+  });
+  document.getElementById('swipe-div').style.display = mode === 'swipe' ? 'block' : 'none';
+  document.getElementById('label-before').style.display = mode === 'overlay' ? 'none' : 'block';
+  document.getElementById('label-after').style.display  = mode === 'overlay' ? 'none' : 'block';
+  updateLayers();
+}
+
+function updateLayers() {
+  const { beforeLayer, afterLayer, mode } = S;
+  if (beforeLayer) map.removeLayer(beforeLayer);
+  if (afterLayer)  map.removeLayer(afterLayer);
+
+  if (mode === 'side' || mode === 'swipe') {
+    if (beforeLayer) beforeLayer.addTo(map);
+    if (afterLayer)  afterLayer.addTo(map);
+    if (mode === 'swipe') applySwipe(S.swipePos);
+  } else if (mode === 'overlay') {
+    if (beforeLayer) beforeLayer.addTo(map);
+    if (afterLayer)  { afterLayer.addTo(map); afterLayer.setOpacity(0.6); }
+  }
+
+  // Ensure draw layer on top
+  drawLayer.bringToFront();
+  if (S.tenementLayer) S.tenementLayer.bringToFront();
+}
+
+// ── SWIPE ─────────────────────────────────────────────────────────────────────
+function applySwipe(pos) {
+  if (!S.afterLayer) return;
+  const mapEl = document.getElementById('map');
+  const px = Math.round(mapEl.offsetWidth * pos);
+  document.getElementById('swipe-div').style.left = px + 'px';
+  const el = S.afterLayer.getElement ? S.afterLayer.getElement() : null;
+  if (el) { el.style.clipPath = `inset(0 0 0 ${px}px)`; }
+}
+
+const sd = document.getElementById('swipe-div');
+sd.addEventListener('mousedown',  e => { S.swiping = true; e.preventDefault(); });
+sd.addEventListener('touchstart', e => { S.swiping = true; });
+document.addEventListener('mousemove', e => {
+  if (!S.swiping) return;
+  const r = document.getElementById('map').getBoundingClientRect();
+  S.swipePos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  applySwipe(S.swipePos);
+});
+document.addEventListener('touchmove', e => {
+  if (!S.swiping) return;
+  const r = document.getElementById('map').getBoundingClientRect();
+  S.swipePos = Math.max(0, Math.min(1, (e.touches[0].clientX - r.left) / r.width));
+  applySwipe(S.swipePos);
+});
+document.addEventListener('mouseup',  () => { S.swiping = false; });
+document.addEventListener('touchend', () => { S.swiping = false; });
+
+// ── OPACITY ───────────────────────────────────────────────────────────────────
+function setOpacity(which, val) {
+  document.getElementById('opv-'+which).textContent = val + '%';
+  if (S[which+'Layer']) S[which+'Layer'].setOpacity(val / 100);
+}
+
+// ── DATE LABELS ───────────────────────────────────────────────────────────────
+function updateDateLabels() {
+  const b = document.getElementById('date-before').value || 'BEFORE';
+  const a = document.getElementById('date-after').value  || 'AFTER';
+  document.getElementById('label-before').textContent = b;
+  document.getElementById('label-after').textContent  = a;
+  document.getElementById('hdr-before').textContent   = b;
+  document.getElementById('hdr-after').textContent    = a;
+}
+
+// ── DRAWING ───────────────────────────────────────────────────────────────────
+function setTool(tool) {
+  S.tool = tool;
+  ['polygon','marker','none'].forEach(t => {
+    document.getElementById('tool-'+t).classList.toggle('active', t === tool);
+  });
+  map.getContainer().style.cursor = tool === 'none' ? '' : 'crosshair';
+  if (tool !== 'polygon' && S.curPolyPts.length > 0) finishPoly();
+}
+
+function handlePolyClick(e) {
+  S.curPolyPts.push(e.latlng);
+  if (S.previewLine) map.removeLayer(S.previewLine);
+  if (S.curPolyPts.length > 1) {
+    S.previewLine = L.polyline(S.curPolyPts, {
+      color: S.colors[S.colorIdx % S.colors.length], weight: 2, dashArray: '5 4'
+    }).addTo(map);
+  }
+  if (S.curPolyPts.length === 1) notify('Click to add points · Double-click to finish');
+}
+
+function finishPoly() {
+  if (S.curPolyPts.length < 3) {
+    notify('Need 3+ points'); S.curPolyPts = [];
+    if (S.previewLine) { map.removeLayer(S.previewLine); S.previewLine = null; }
+    return;
+  }
+  if (S.previewLine) { map.removeLayer(S.previewLine); S.previewLine = null; }
+  const color = S.colors[S.colorIdx++ % S.colors.length];
+  const poly = L.polygon(S.curPolyPts, { color, fillColor: color, fillOpacity: 0.18, weight: 2 }).addTo(drawLayer);
+  const area = calcArea(S.curPolyPts);
+  const id = Date.now();
+  poly._cid = id;
+  S.polygons.push({ id, poly, area, color, label: 'Zone ' + S.polygons.length });
+  S.curPolyPts = [];
+  updateStats();
+  notify(`Polygon: ${area.toFixed(2)} ha`);
+}
+
+function addMarker(latlng) {
+  const m = L.circleMarker(latlng, { radius: 6, color: '#f0c040', fillColor: '#f0c040', fillOpacity: 0.85, weight: 2 }).addTo(drawLayer);
+  S.markers.push(m);
+  notify(`Marker: ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`);
+}
+
+function calcArea(pts) {
+  if (pts.length < 3) return 0;
+  let area = 0; const R = 6371000;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    const xi = pts[i].lng * Math.PI/180 * Math.cos(pts[i].lat * Math.PI/180) * R;
+    const yi = pts[i].lat * Math.PI/180 * R;
+    const xj = pts[j].lng * Math.PI/180 * Math.cos(pts[j].lat * Math.PI/180) * R;
+    const yj = pts[j].lat * Math.PI/180 * R;
+    area += xi * yj - xj * yi;
+  }
+  return Math.abs(area) / 2 / 10000;
+}
+
+function removePolygon(id) {
+  const i = S.polygons.findIndex(p => p.id === id);
+  if (i >= 0) { map.removeLayer(S.polygons[i].poly); S.polygons.splice(i, 1); updateStats(); }
+}
+
+function clearAll() {
+  S.polygons.forEach(p => map.removeLayer(p.poly));
+  S.markers.forEach(m => map.removeLayer(m));
+  S.polygons = []; S.markers = []; S.curPolyPts = [];
+  if (S.previewLine) { map.removeLayer(S.previewLine); S.previewLine = null; }
+  updateStats(); notify('Cleared');
+}
+
+function updateStats() {
+  const total = S.polygons.reduce((s, p) => s + p.area, 0);
+  document.getElementById('stat-ha').textContent = total.toFixed(2);
+  document.getElementById('stat-n').textContent  = S.polygons.length;
+  const list = document.getElementById('poly-list');
+  list.innerHTML = '';
+  S.polygons.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'poly-item';
+    d.innerHTML = `<div class="poly-col" style="background:${p.color}"></div>
+      <span class="poly-lbl">${p.label}</span>
+      <span class="poly-area">${p.area.toFixed(2)} ha</span>
+      <span class="poly-del" onclick="removePolygon(${p.id})">✕</span>`;
+    list.appendChild(d);
+  });
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+function showExport() { document.getElementById('export-modal').classList.add('show'); }
+function hideExport() { document.getElementById('export-modal').classList.remove('show'); }
+
+function genReport() {
+  const site    = document.getElementById('exp-site').value    || 'Unnamed Project';
+  const before  = document.getElementById('exp-before').value  || document.getElementById('date-before').value || '—';
+  const after   = document.getElementById('exp-after').value   || document.getElementById('date-after').value  || '—';
+  const author  = document.getElementById('exp-author').value  || '—';
+  const notes   = document.getElementById('exp-notes').value   || '';
+  const mapNotes= document.getElementById('notes').value       || '';
+  const total   = S.polygons.reduce((s, p) => s + p.area, 0).toFixed(2);
+  const now     = new Date().toISOString().slice(0,10);
+  const center  = map.getCenter();
+
+  const polyRows = S.polygons.map(p =>
+    `<tr><td>${p.label}</td><td><span style="display:inline-block;width:12px;height:12px;background:${p.color};border-radius:2px;"></span></td><td>${p.area.toFixed(4)} ha</td></tr>`
+  ).join('');
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>MapCompare Report — ${site}</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 24px;color:#1a1a1a;}
+  h1{font-size:20px;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:20px;}
+  h2{font-size:13px;margin-top:24px;color:#444;border-bottom:1px solid #ddd;padding-bottom:5px;text-transform:uppercase;letter-spacing:0.08em;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;}
+  .cell{background:#f5f5f5;padding:10px 14px;border-radius:4px;}
+  .cl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;}
+  .cv{font-size:13px;font-weight:bold;}
+  .big{font-size:32px;font-weight:800;color:#b8860b;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;}
+  th{background:#1a1a1a;color:#fff;padding:7px 10px;text-align:left;font-size:11px;}
+  td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;}
+  tr:nth-child(even) td{background:#fafafa;}
+  .notes{background:#fffbf0;border-left:3px solid #f0c040;padding:10px 14px;border-radius:4px;font-size:12px;line-height:1.6;}
+  .footer{margin-top:32px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}
+  @media print{body{margin:20px;}}
+</style></head><body>
+<h1>MapCompare — Change Detection Report</h1>
+<div class="grid">
+  <div class="cell"><div class="cl">Project / Site</div><div class="cv">${site}</div></div>
+  <div class="cell"><div class="cl">Prepared By</div><div class="cv">${author}</div></div>
+  <div class="cell"><div class="cl">Before Date</div><div class="cv">${before}</div></div>
+  <div class="cell"><div class="cl">After Date</div><div class="cv">${after}</div></div>
+  <div class="cell"><div class="cl">Report Generated</div><div class="cv">${now}</div></div>
+  <div class="cell"><div class="cl">Map Centre (WGS84)</div><div class="cv">${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}</div></div>
+</div>
+<h2>Summary</h2>
+<div class="grid">
+  <div class="cell"><div class="cl">Total Disturbance Area</div><div class="big">${total} <span style="font-size:14px;color:#888;">ha</span></div></div>
+  <div class="cell"><div class="cl">Polygons Mapped</div><div class="big">${S.polygons.length}</div></div>
+</div>
+${S.polygons.length > 0 ? `<h2>Polygon Detail</h2><table><thead><tr><th>Label</th><th>Colour</th><th>Area (ha)</th></tr></thead><tbody>${polyRows}</tbody></table>` : ''}
+${notes || mapNotes ? `<h2>Observations</h2><div class="notes">${(notes + (mapNotes ? '\n\n' + mapNotes : '')).replace(/\n/g,'<br>')}</div>` : ''}
+<div class="footer">Generated by MapCompare &nbsp;|&nbsp; ${now} &nbsp;|&nbsp; ${S.beforeName} vs ${S.afterName}</div>
+</body></html>`;
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([html], {type:'text/html'}));
+  a.download = `mapcompare_report_${now}.html`;
+  a.click();
+  hideExport();
+  notify('Report downloaded!');
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.classList.toggle('open');
+}
+
+// ── NOTIFY ────────────────────────────────────────────────────────────────────
+let notifTimer;
+function notify(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── MOBILE MENU BTN ───────────────────────────────────────────────────────────
+if (window.innerWidth <= 600) {
+  document.getElementById('menu-btn').style.display = 'block';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+setMode('side');
+loadR2Tiles();
+</script>
+</body>
+</html>
